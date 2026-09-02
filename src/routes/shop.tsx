@@ -1,21 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { ProductCard } from "@/components/site/ProductCard";
-import { CATEGORIES, categoryFor, fetchProducts } from "@/lib/shopify";
-
-const productsQuery = queryOptions({
-  queryKey: ["products"],
-  queryFn: () => fetchProducts(),
-});
+import { buildCategories, productInCategory } from "@/lib/shopify";
+import { collectionsQuery, productsQuery } from "@/lib/shopify-queries";
 
 export const Route = createFileRoute("/shop")({
   validateSearch: z.object({ c: z.string().optional() }),
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(productsQuery);
+    await Promise.all([
+      context.queryClient.ensureQueryData(productsQuery),
+      context.queryClient.ensureQueryData(collectionsQuery),
+    ]);
   },
   head: () => ({
+
     meta: [
       { title: "Shop — ZAKAAS Chakli, Bhakarwadi & Shankarpada" },
       {
