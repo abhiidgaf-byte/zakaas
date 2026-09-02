@@ -127,7 +127,7 @@ function HomePage() {
         <h2 className="font-display text-4xl">THREE HEROES</h2>
         <p className="mt-1 text-muted-foreground">Everything starts here.</p>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {CATEGORIES.map((category, i) => {
+          {categories.map((category, i) => {
             const image = imageForCategory(category.slug);
             return (
               <Reveal key={category.slug} delay={i * 90}>
