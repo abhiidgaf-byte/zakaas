@@ -3,7 +3,7 @@ import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import { useCartStore } from "@/stores/cartStore";
-import { categoryFor, firstImage, firstVariant, formatMoney, type ShopifyProduct } from "@/lib/shopify";
+import { firstImage, firstVariant, formatMoney, type ShopifyProduct } from "@/lib/shopify";
 
 export function ProductCard({ product, index }: { product: ShopifyProduct; index: number }) {
   const addItem = useCartStore((s) => s.addItem);
@@ -12,8 +12,7 @@ export function ProductCard({ product, index }: { product: ShopifyProduct; index
 
   const image = firstImage(product);
   const variant = firstVariant(product);
-  const category = categoryFor(product);
-  const number = category?.number ?? String(index + 1).padStart(2, "0");
+  const number = String(index + 1).padStart(2, "0");
   const soldOut = !variant?.availableForSale;
 
   async function addToCart() {

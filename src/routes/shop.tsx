@@ -1,21 +1,21 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { ProductCard } from "@/components/site/ProductCard";
-import { CATEGORIES, categoryFor, fetchProducts } from "@/lib/shopify";
-
-const productsQuery = queryOptions({
-  queryKey: ["products"],
-  queryFn: () => fetchProducts(),
-});
+import { buildCategories, productInCategory } from "@/lib/shopify";
+import { collectionsQuery, productsQuery } from "@/lib/shopify-queries";
 
 export const Route = createFileRoute("/shop")({
   validateSearch: z.object({ c: z.string().optional() }),
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(productsQuery);
+    await Promise.all([
+      context.queryClient.ensureQueryData(productsQuery),
+      context.queryClient.ensureQueryData(collectionsQuery),
+    ]);
   },
   head: () => ({
+
     meta: [
       { title: "Shop — ZAKAAS Chakli, Bhakarwadi & Shankarpada" },
       {
@@ -38,8 +38,11 @@ export const Route = createFileRoute("/shop")({
 function ShopPage() {
   const { c } = Route.useSearch();
   const { data: products } = useSuspenseQuery(productsQuery);
+  const { data: collections } = useSuspenseQuery(collectionsQuery);
 
-  const filtered = c ? products.filter((p) => categoryFor(p)?.slug === c) : products;
+  const categories = buildCategories(products, collections);
+  const active = categories.find((cat) => cat.slug === c) ?? null;
+  const filtered = active ? products.filter((p) => productInCategory(p, active)) : products;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
@@ -48,10 +51,11 @@ function ShopPage() {
 
       <div className="mt-7 flex flex-wrap gap-2" role="group" aria-label="Filter by category">
         <FilterChip label="ALL" active={!c} to={undefined} />
-        {CATEGORIES.map((cat) => (
+        {categories.map((cat) => (
           <FilterChip key={cat.slug} label={cat.name} active={c === cat.slug} to={cat.slug} />
         ))}
       </div>
+
 
       <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((product, i) => (

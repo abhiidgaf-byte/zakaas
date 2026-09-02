@@ -1,20 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Marquee } from "@/components/site/Marquee";
 import { ProductCard } from "@/components/site/ProductCard";
 import { Reveal } from "@/components/site/Reveal";
 import { DrivingRickshaw, RickshawArt } from "@/components/site/Rickshaw";
-import { CATEGORIES, categoryFor, fetchProducts, firstImage } from "@/lib/shopify";
-
-const productsQuery = queryOptions({ queryKey: ["products"], queryFn: () => fetchProducts() });
+import { buildCategories, firstImage, productInCategory } from "@/lib/shopify";
+import { collectionsQuery, productsQuery } from "@/lib/shopify-queries";
 
 export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(productsQuery);
+    await Promise.all([
+      context.queryClient.ensureQueryData(productsQuery),
+      context.queryClient.ensureQueryData(collectionsQuery),
+    ]);
   },
   head: () => ({
+
     meta: [
       { title: "ZAKAAS — Maharashtrian Snacks with New-Gen Attitude" },
       {
@@ -34,22 +37,28 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-const CRAVINGS = [
-  { key: "SPICY", line: "You want heat. Chakli, Tikha Masala.", slug: "chakli" },
-  { key: "SWEET", line: "Sugar-dusted and dangerous. Shankarpada.", slug: "shankarpada" },
-  { key: "CRUNCHY", line: "Loud bite, no apologies. Bhakarwadi.", slug: "bhakarwadi" },
-  { key: "CHAI-SIDE", line: "The 4pm classic. Bhakarwadi, Original.", slug: "bhakarwadi" },
-];
-
 function HomePage() {
   const { data: products } = useSuspenseQuery(productsQuery);
-  const [craving, setCraving] = useState<(typeof CRAVINGS)[number]>(CRAVINGS[0]!);
+  const { data: collections } = useSuspenseQuery(collectionsQuery);
+  const categories = buildCategories(products, collections);
+
+  const cravings = categories.slice(0, 4).map((cat) => ({
+    key: cat.name,
+    line: cat.blurb || `${cat.name}. Straight out of the batch.`,
+    slug: cat.slug,
+  }));
+  const [cravingSlug, setCravingSlug] = useState<string | null>(null);
+  const craving = cravings.find((option) => option.slug === cravingSlug) ?? cravings[0] ?? null;
 
   const heroImage = products[0] ? firstImage(products[0])?.url : undefined;
   const imageForCategory = (slug: string) => {
-    const match = products.find((p) => categoryFor(p)?.slug === slug);
+    const cat = categories.find((c) => c.slug === slug);
+    if (!cat) return undefined;
+    if (cat.image) return cat.image;
+    const match = products.find((p) => productInCategory(p, cat));
     return match ? firstImage(match)?.url : undefined;
   };
+
 
   return (
     <div>
@@ -118,7 +127,7 @@ function HomePage() {
         <h2 className="font-display text-4xl">THREE HEROES</h2>
         <p className="mt-1 text-muted-foreground">Everything starts here.</p>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {CATEGORIES.map((category, i) => {
+          {categories.map((category, i) => {
             const image = imageForCategory(category.slug);
             return (
               <Reveal key={category.slug} delay={i * 90}>
