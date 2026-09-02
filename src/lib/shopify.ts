@@ -65,9 +65,27 @@ const PRODUCT_BY_HANDLE_QUERY = `
   }
 `;
 
+const COLLECTIONS_QUERY = `
+  query GetCollections($first: Int!) {
+    collections(first: $first) {
+      edges {
+        node {
+          id
+          handle
+          title
+          description
+          image { url altText }
+          products(first: 100) { edges { node { id handle } } }
+        }
+      }
+    }
+  }
+`;
+
 export async function storefrontApiRequest(query: string, variables: Record<string, unknown> = {}) {
   const response = await fetch(SHOPIFY_STOREFRONT_URL, {
     method: "POST",
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
@@ -108,6 +126,43 @@ export async function fetchProductByHandle(handle: string): Promise<ShopifyProdu
   const node = data?.data?.product;
   return node ? ({ node } as ShopifyProduct) : null;
 }
+
+export interface ShopifyCollection {
+  id: string;
+  handle: string;
+  title: string;
+  description: string;
+  image: { url: string; altText: string | null } | null;
+  productHandles: string[];
+}
+
+/** Collections Shopify auto-creates that aren't editorial categories. */
+const IGNORED_COLLECTION_HANDLES = new Set(["frontpage", "all"]);
+
+export async function fetchCollections(): Promise<ShopifyCollection[]> {
+  const data = await storefrontApiRequest(COLLECTIONS_QUERY, { first: 50 });
+  const edges = (data?.data?.collections?.edges ?? []) as Array<{
+    node: {
+      id: string;
+      handle: string;
+      title: string;
+      description: string;
+      image: { url: string; altText: string | null } | null;
+      products: { edges: Array<{ node: { id: string; handle: string } }> };
+    };
+  }>;
+  return edges
+    .map(({ node }) => ({
+      id: node.id,
+      handle: node.handle,
+      title: node.title,
+      description: node.description ?? "",
+      image: node.image ?? null,
+      productHandles: (node.products?.edges ?? []).map((e) => e.node.handle),
+    }))
+    .filter((c) => !IGNORED_COLLECTION_HANDLES.has(c.handle));
+}
+
 
 export function formatMoney(amount: string | number, currencyCode = "INR") {
   const value = typeof amount === "string" ? parseFloat(amount) : amount;
