@@ -206,19 +206,20 @@ export function buildCategories(
   const pad = (i: number) => String(i + 1).padStart(2, "0");
 
   if (collections.length > 0) {
-    return collections.map((c, i) => ({
-      slug: c.handle,
-      name: c.title.toUpperCase(),
-      number: pad(i),
-      blurb: c.description,
-      image:
-        c.image?.url ??
-        firstImage(products.find((p) => c.productHandles.includes(p.node.handle))!ate ?? null) ??
-        null,
-      productHandles: c.productHandles,
-      productType: null,
-    }));
+    return collections.map((c, i) => {
+      const member = products.find((p) => c.productHandles.includes(p.node.handle));
+      return {
+        slug: c.handle,
+        name: c.title.toUpperCase(),
+        number: pad(i),
+        blurb: c.description,
+        image: c.image?.url ?? (member ? (firstImage(member)?.url ?? null) : null),
+        productHandles: c.productHandles,
+        productType: null,
+      };
+    });
   }
+
 
   const types: string[] = [];
   for (const p of products) {
