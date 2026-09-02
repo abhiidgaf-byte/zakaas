@@ -6,18 +6,11 @@ import { Marquee } from "@/components/site/Marquee";
 import { ProductCard } from "@/components/site/ProductCard";
 import { Reveal } from "@/components/site/Reveal";
 import { DrivingRickshaw, RickshawArt } from "@/components/site/Rickshaw";
-import { listCategories, listProducts } from "@/lib/catalog.functions";
+import { CATEGORIES, categoryFor, fetchProducts, firstImage } from "@/lib/shopify";
 
-const productsQuery = queryOptions({ queryKey: ["products"], queryFn: () => listProducts() });
-const categoriesQuery = queryOptions({ queryKey: ["categories"], queryFn: () => listCategories() });
+const productsQuery = queryOptions({ queryKey: ["products"], queryFn: () => fetchProducts() });
 
 export const Route = createFileRoute("/")({
-  loader: async ({ context }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(productsQuery),
-      context.queryClient.ensureQueryData(categoriesQuery),
-    ]);
-  },
   head: () => ({
     meta: [
       { title: "ZAKAAS — Maharashtrian Snacks with New-Gen Attitude" },
@@ -47,14 +40,22 @@ const CRAVINGS = [
 
 function HomePage() {
   const { data: products } = useSuspenseQuery(productsQuery);
-  const { data: categories } = useSuspenseQuery(categoriesQuery);
   const [craving, setCraving] = useState<(typeof CRAVINGS)[number]>(CRAVINGS[0]!);
+
+  const heroImage = products[0] ? firstImage(products[0])?.url : undefined;
+  const imageForCategory = (slug: string) => {
+    const match = products.find((p) => categoryFor(p)?.slug === slug);
+    return match ? firstImage(match)?.url : undefined;
+  };
 
   return (
     <div>
       {/* HERO */}
       <section className="relative overflow-hidden bg-red text-paper">
-        <div className="pattern-halftone pointer-events-none absolute inset-0 opacity-25" aria-hidden />
+        <div
+          className="pattern-halftone pointer-events-none absolute inset-0 opacity-25"
+          aria-hidden
+        />
         <div className="relative mx-auto grid max-w-6xl gap-10 px-4 pt-16 pb-28 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
           <div>
             <p className="stamp-sm inline-block rotate-[-3deg] bg-gold px-3 py-1 text-xs font-bold tracking-[0.25em] text-ink">
@@ -90,13 +91,15 @@ function HomePage() {
 
           <div className="relative">
             <div className="stamp rotate-[2deg] overflow-hidden bg-paper">
-              <img
-                src={categories[0]?.hero_image_url ?? products[0]?.image_url ?? ""}
-                alt="ZAKAAS Maharashtrian snacks packed in retro tins"
-                width={1024}
-                height={1024}
-                className="aspect-square w-full object-cover"
-              />
+              {heroImage && (
+                <img
+                  src={heroImage}
+                  alt="ZAKAAS Maharashtrian snacks packed in retro tins"
+                  width={1024}
+                  height={1024}
+                  className="aspect-square w-full object-cover"
+                />
+              )}
             </div>
             <RickshawArt className="animate-bump absolute -bottom-10 -left-6 h-24 w-auto" />
           </div>
@@ -112,35 +115,43 @@ function HomePage() {
         <h2 className="font-display text-4xl">THREE HEROES</h2>
         <p className="mt-1 text-muted-foreground">Everything starts here.</p>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {categories.map((category, i) => (
-            <Reveal key={category.id} delay={i * 90}>
-              <Link
-                to="/shop"
-                search={{ c: category.slug }}
-                className="stamp stamp-hover block h-full overflow-hidden bg-card"
-              >
-                <img
-                  src={category.hero_image_url}
-                  alt={`${category.name} from ZAKAAS`}
-                  loading="lazy"
-                  width={1024}
-                  height={1024}
-                  className="aspect-[4/3] w-full border-b-[3px] border-ink object-cover"
-                />
-                <div className="p-5">
-                  <p className="font-display text-sm text-red">{category.number}</p>
-                  <h3 className="font-display text-3xl">{category.name}</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">{category.blurb}</p>
-                </div>
-              </Link>
-            </Reveal>
-          ))}
+          {CATEGORIES.map((category, i) => {
+            const image = imageForCategory(category.slug);
+            return (
+              <Reveal key={category.slug} delay={i * 90}>
+                <Link
+                  to="/shop"
+                  search={{ c: category.slug }}
+                  className="stamp stamp-hover block h-full overflow-hidden bg-card"
+                >
+                  {image && (
+                    <img
+                      src={image}
+                      alt={`${category.name} from ZAKAAS`}
+                      loading="lazy"
+                      width={1024}
+                      height={1024}
+                      className="aspect-[4/3] w-full border-b-[3px] border-ink object-cover"
+                    />
+                  )}
+                  <div className="p-5">
+                    <p className="font-display text-sm text-red">{category.number}</p>
+                    <h3 className="font-display text-3xl">{category.name}</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">{category.blurb}</p>
+                  </div>
+                </Link>
+              </Reveal>
+            );
+          })}
         </div>
       </section>
 
       {/* CRAVING SELECTOR */}
       <section className="relative overflow-hidden bg-green py-16 text-paper">
-        <div className="pattern-halftone pointer-events-none absolute inset-0 opacity-20" aria-hidden />
+        <div
+          className="pattern-halftone pointer-events-none absolute inset-0 opacity-20"
+          aria-hidden
+        />
         <div className="relative mx-auto max-w-4xl px-4 text-center">
           <h2 className="font-display text-4xl">WHAT ARE YOU CRAVING?</h2>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
@@ -177,13 +188,17 @@ function HomePage() {
             SEE ALL →
           </Link>
         </div>
-        <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {products.slice(0, 6).map((product, i) => (
-            <Reveal key={product.id} delay={i * 70}>
-              <ProductCard product={product} index={i} />
-            </Reveal>
-          ))}
-        </div>
+        {products.length === 0 ? (
+          <p className="stamp mt-8 bg-card p-8 text-center font-bold">No products found.</p>
+        ) : (
+          <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {products.slice(0, 6).map((product, i) => (
+              <Reveal key={product.node.id} delay={i * 70}>
+                <ProductCard product={product} index={i} />
+              </Reveal>
+            ))}
+          </div>
+        )}
       </section>
 
       <Marquee className="bg-red text-paper" slow />
