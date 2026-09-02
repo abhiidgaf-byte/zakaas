@@ -185,36 +185,63 @@ export function firstVariant(product: ShopifyProduct) {
   return product.node.variants?.edges?.[0]?.node ?? null;
 }
 
-/** Editorial categories for the ZAKAAS lineup, matched to Shopify product types. */
-export const CATEGORIES = [
-  {
-    slug: "chakli",
-    name: "CHAKLI",
-    number: "01",
-    blurb: "Spiral-fried, deeply crunchy, impossible to stop at one.",
-    productType: "Chakli",
-  },
-  {
-    slug: "bhakarwadi",
-    name: "BHAKARWADI",
-    number: "02",
-    blurb: "Sweet, spicy, tangy — rolled tight and fried right.",
-    productType: "Bhakarwadi",
-  },
-  {
-    slug: "shankarpada",
-    name: "SHANKARPADA",
-    number: "03",
-    blurb: "Little diamonds of dough. Tea's oldest partner.",
-    productType: "Shankarpada",
-  },
-] as const;
-
-export function categoryFor(product: ShopifyProduct) {
-  const type = product.node.productType?.toLowerCase() ?? "";
-  return (
-    CATEGORIES.find((c) => c.productType.toLowerCase() === type) ??
-    CATEGORIES.find((c) => product.node.title.toLowerCase().includes(c.slug)) ??
-    null
-  );
+export interface Category {
+  slug: string;
+  name: string;
+  number: string;
+  blurb: string;
+  image: string | null;
+  productHandles: string[] | null;
+  productType: string | null;
 }
+
+/**
+ * Categories are derived entirely from Shopify: real collections when the store
+ * has them, otherwise grouped by the products' Shopify product type.
+ */
+export function buildCategories(
+  products: ShopifyProduct[],
+  collections: ShopifyCollection[],
+): Category[] {
+  const pad = (i: number) => String(i + 1).padStart(2, "0");
+
+  if (collections.length > 0) {
+    return collections.map((c, i) => ({
+      slug: c.handle,
+      name: c.title.toUpperCase(),
+      number: pad(i),
+      blurb: c.description,
+      image:
+        c.image?.url ??
+        firstImage(products.find((p) => c.productHandles.includes(p.node.handle))!ate ?? null) ??
+        null,
+      productHandles: c.productHandles,
+      productType: null,
+    }));
+  }
+
+  const types: string[] = [];
+  for (const p of products) {
+    const t = p.node.productType?.trim();
+    if (t && !types.includes(t)) types.push(t);
+  }
+  return types.map((t, i) => ({
+    slug: t.toLowerCase().replace(/\s+/g, "-"),
+    name: t.toUpperCase(),
+    number: pad(i),
+    blurb: "",
+    image: null,
+    productHandles: null,
+    productType: t,
+  }));
+}
+
+export function productInCategory(product: ShopifyProduct, category: Category) {
+  if (category.productHandles) return category.productHandles.includes(product.node.handle);
+  return (product.node.productType ?? "").toLowerCase() === (category.productType ?? "").toLowerCase();
+}
+
+export function categoryFor(product: ShopifyProduct, categories: Category[]) {
+  return categories.find((c) => productInCategory(product, c)) ?? null;
+}
+
