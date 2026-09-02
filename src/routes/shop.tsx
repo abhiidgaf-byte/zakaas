@@ -3,25 +3,17 @@ import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { ProductCard } from "@/components/site/ProductCard";
-import { listCategories, listProducts } from "@/lib/catalog.functions";
+import { CATEGORIES, categoryFor, fetchProducts } from "@/lib/shopify";
 
 const productsQuery = queryOptions({
   queryKey: ["products"],
-  queryFn: () => listProducts(),
-});
-
-const categoriesQuery = queryOptions({
-  queryKey: ["categories"],
-  queryFn: () => listCategories(),
+  queryFn: () => fetchProducts(),
 });
 
 export const Route = createFileRoute("/shop")({
   validateSearch: z.object({ c: z.string().optional() }),
   loader: async ({ context }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(productsQuery),
-      context.queryClient.ensureQueryData(categoriesQuery),
-    ]);
+    await context.queryClient.ensureQueryData(productsQuery);
   },
   head: () => ({
     meta: [
@@ -46,9 +38,8 @@ export const Route = createFileRoute("/shop")({
 function ShopPage() {
   const { c } = Route.useSearch();
   const { data: products } = useSuspenseQuery(productsQuery);
-  const { data: categories } = useSuspenseQuery(categoriesQuery);
 
-  const filtered = c ? products.filter((p) => p.categories?.slug === c) : products;
+  const filtered = c ? products.filter((p) => categoryFor(p)?.slug === c) : products;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
@@ -57,23 +48,25 @@ function ShopPage() {
 
       <div className="mt-7 flex flex-wrap gap-2" role="group" aria-label="Filter by category">
         <FilterChip label="ALL" active={!c} to={undefined} />
-        {categories.map((cat) => (
-          <FilterChip key={cat.id} label={cat.name} active={c === cat.slug} to={cat.slug} />
+        {CATEGORIES.map((cat) => (
+          <FilterChip key={cat.slug} label={cat.name} active={c === cat.slug} to={cat.slug} />
         ))}
       </div>
 
       <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((product, i) => (
-          <div key={product.id} className="animate-rise" style={{ animationDelay: `${i * 60}ms` }}>
+          <div
+            key={product.node.id}
+            className="animate-rise"
+            style={{ animationDelay: `${i * 60}ms` }}
+          >
             <ProductCard product={product} index={i} />
           </div>
         ))}
       </div>
 
       {filtered.length === 0 && (
-        <p className="stamp mt-10 bg-card p-8 text-center font-bold">
-          New flavours dropping soon. थोडं थांब.
-        </p>
+        <p className="stamp mt-10 bg-card p-8 text-center font-bold">No products found.</p>
       )}
     </div>
   );
