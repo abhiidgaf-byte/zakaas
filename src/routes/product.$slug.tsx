@@ -1,17 +1,22 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { Minus, Plus } from "lucide-react";
+import { Loader2, Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { getProductBySlug } from "@/lib/catalog.functions";
-import { useCart } from "@/lib/cart";
-import { formatINR } from "@/lib/schemas";
+import {
+  categoryFor,
+  fetchProductByHandle,
+  firstImage,
+  formatMoney,
+  type ShopifyProduct,
+} from "@/lib/shopify";
+import { useCartStore } from "@/stores/cartStore";
 
 const productQuery = (slug: string) =>
   queryOptions({
     queryKey: ["product", slug],
-    queryFn: () => getProductBySlug({ data: { slug } }),
+    queryFn: () => fetchProductByHandle(slug),
   });
 
 export const Route = createFileRoute("/product/$slug")({
@@ -21,9 +26,10 @@ export const Route = createFileRoute("/product/$slug")({
     return product;
   },
   head: ({ loaderData }) => {
-    const name = loaderData?.name ?? "Snack";
+    const product = loaderData as ShopifyProduct | undefined;
+    const name = product?.node.title ?? "Snack";
     const description =
-      loaderData?.description ?? "A ZAKAAS Maharashtrian snack, made in small batches.";
+      product?.node.description || "A ZAKAAS Maharashtrian snack, made in small batches.";
     return {
       meta: [
         { title: `${name} — ZAKAAS` },
@@ -49,25 +55,29 @@ const DETAILS = [
 function ProductPage() {
   const { slug } = Route.useParams();
   const { data: product } = useSuspenseQuery(productQuery(slug));
-  const { add, setOpen } = useCart();
+  const addItem = useCartStore((s) => s.addItem);
+  const isLoading = useCartStore((s) => s.isLoading);
+  const setOpen = useCartStore((s) => s.setOpen);
   const [qty, setQty] = useState(1);
+  const [variantId, setVariantId] = useState<string | null>(null);
 
   if (!product) return null;
 
-  function addToCart() {
-    if (!product) return;
-    add(
-      {
-        productId: product.id,
-        name: product.name,
-        flavour: product.flavour,
-        slug: product.slug ?? "",
-        imageUrl: product.image_url,
-        pricePaise: product.price_paise,
-        weightGrams: product.weight_grams,
-      },
-      qty,
-    );
+  const variants = product.node.variants.edges.map((e) => e.node);
+  const variant = variants.find((v) => v.id === variantId) ?? variants[0];
+  const image = firstImage(product);
+  const category = categoryFor(product);
+
+  async function addToCart() {
+    if (!product || !variant) return;
+    await addItem({
+      product,
+      variantId: variant.id,
+      variantTitle: variant.title,
+      price: variant.price,
+      quantity: qty,
+      selectedOptions: variant.selectedOptions ?? [],
+    });
     toast.success("ADDED. झकास.");
     setOpen(true);
   }
@@ -80,25 +90,46 @@ function ProductPage() {
 
       <div className="mt-6 grid gap-10 lg:grid-cols-2">
         <div className="stamp overflow-hidden bg-card">
-          <img
-            src={product.image_url}
-            alt={`${product.name} — ${product.flavour} by ZAKAAS`}
-            width={1024}
-            height={1024}
-            className="aspect-square w-full object-cover transition-transform duration-500 hover:scale-105"
-          />
+          {image && (
+            <img
+              src={image.url}
+              alt={image.altText ?? `${product.node.title} by ZAKAAS`}
+              width={1024}
+              height={1024}
+              className="aspect-square w-full object-cover transition-transform duration-500 hover:scale-105"
+            />
+          )}
         </div>
 
         <div>
           <p className="text-xs font-bold tracking-[0.3em] text-red">
-            {product.categories?.number ?? "01"} — {product.categories?.name ?? "SNACK"}
+            {category?.number ?? "01"} — {category?.name ?? product.node.productType ?? "SNACK"}
           </p>
-          <h1 className="font-display mt-2 text-5xl leading-none sm:text-6xl">{product.name}</h1>
-          <p className="mt-3 text-sm font-bold tracking-[0.22em]">
-            {product.flavour} · {product.weight_grams}G
+          <h1 className="font-display mt-2 text-5xl leading-none sm:text-6xl">
+            {product.node.title}
+          </h1>
+          <p className="mt-5 text-lg text-muted-foreground">{product.node.description}</p>
+          <p className="font-display mt-6 text-4xl">
+            {variant && formatMoney(variant.price.amount, variant.price.currencyCode)}
           </p>
-          <p className="mt-5 text-lg text-muted-foreground">{product.description}</p>
-          <p className="font-display mt-6 text-4xl">{formatINR(product.price_paise)}</p>
+
+          {variants.length > 1 && (
+            <div className="mt-5 flex flex-wrap gap-2">
+              {variants.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => setVariantId(v.id)}
+                  disabled={!v.availableForSale}
+                  className={`stamp-sm px-4 py-2 text-xs font-bold tracking-[0.18em] disabled:opacity-40 ${
+                    v.id === variant?.id ? "bg-red text-paper" : "bg-paper"
+                  }`}
+                >
+                  {v.title}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <div className="stamp-sm flex items-center bg-paper">
@@ -123,10 +154,16 @@ function ProductPage() {
             <button
               type="button"
               onClick={addToCart}
-              disabled={product.coming_soon}
-              className="stamp-sm stamp-hover flex-1 bg-red px-6 py-3 font-display text-xl text-paper disabled:opacity-50"
+              disabled={!variant?.availableForSale || isLoading}
+              className="stamp-sm stamp-hover flex flex-1 items-center justify-center bg-red px-6 py-3 font-display text-xl text-paper disabled:opacity-50"
             >
-              {product.coming_soon ? "COMING SOON" : "ADD TO CART +"}
+              {isLoading ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : variant?.availableForSale ? (
+                "ADD TO CART +"
+              ) : (
+                "SOLD OUT"
+              )}
             </button>
           </div>
 

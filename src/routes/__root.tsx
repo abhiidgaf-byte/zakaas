@@ -4,7 +4,6 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -12,9 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
-import { CartProvider } from "@/lib/cart";
+import { useCartSync } from "@/hooks/useCartSync";
 import { CartDrawer } from "@/components/site/CartDrawer";
 import { SiteNav } from "@/components/site/SiteNav";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -130,41 +128,30 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const router = useRouter();
-
-  useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
-    });
-    return () => subscription.unsubscribe();
-  }, [router, queryClient]);
-
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const isAdmin = pathname.startsWith("/admin");
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CartProvider>
-        {isAdmin ? (
-          /* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */
-          <Outlet />
-        ) : (
-          <div className="relative flex min-h-screen flex-col">
-            <div className="grain fixed inset-0 z-[60]" style={{ opacity: 0.12 }} aria-hidden />
-            <SiteNav />
-            <main className="flex-1">
-              <Outlet />
-            </main>
-            <SiteFooter />
-            <CartDrawer />
-          </div>
-        )}
-        <Toaster richColors position="top-center" />
-      </CartProvider>
+      <SiteShell />
     </QueryClientProvider>
+  );
+}
+
+function SiteShell() {
+  useCartSync();
+
+  return (
+    <>
+      <div className="relative flex min-h-screen flex-col">
+        <div className="grain fixed inset-0 z-[60]" style={{ opacity: 0.12 }} aria-hidden />
+        <SiteNav />
+        <main className="flex-1">
+          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+          <Outlet />
+        </main>
+        <SiteFooter />
+        <CartDrawer />
+      </div>
+      <Toaster richColors position="top-center" />
+    </>
   );
 }
