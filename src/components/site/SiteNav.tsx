@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Menu, ShoppingBag, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { useCart } from "@/lib/cart";
+import { useCartStore } from "@/stores/cartStore";
 
 const LINKS = [
   { to: "/shop", label: "SHOP", search: undefined },
@@ -13,7 +13,8 @@ const LINKS = [
 ] as const;
 
 export function SiteNav() {
-  const { count, setOpen } = useCart();
+  const setOpen = useCartStore((s) => s.setOpen);
+  const count = useCartStore((s) => s.items.reduce((sum, i) => sum + i.quantity, 0));
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 

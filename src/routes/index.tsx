@@ -11,6 +11,9 @@ import { CATEGORIES, categoryFor, fetchProducts, firstImage } from "@/lib/shopif
 const productsQuery = queryOptions({ queryKey: ["products"], queryFn: () => fetchProducts() });
 
 export const Route = createFileRoute("/")({
+  loader: async ({ context }) => {
+    await context.queryClient.ensureQueryData(productsQuery);
+  },
   head: () => ({
     meta: [
       { title: "ZAKAAS — Maharashtrian Snacks with New-Gen Attitude" },
