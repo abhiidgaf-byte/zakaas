@@ -1,20 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Marquee } from "@/components/site/Marquee";
 import { ProductCard } from "@/components/site/ProductCard";
 import { Reveal } from "@/components/site/Reveal";
 import { DrivingRickshaw, RickshawArt } from "@/components/site/Rickshaw";
-import { CATEGORIES, categoryFor, fetchProducts, firstImage } from "@/lib/shopify";
-
-const productsQuery = queryOptions({ queryKey: ["products"], queryFn: () => fetchProducts() });
+import { buildCategories, firstImage, productInCategory } from "@/lib/shopify";
+import { collectionsQuery, productsQuery } from "@/lib/shopify-queries";
 
 export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
-    await context.queryClient.ensureQueryData(productsQuery);
+    await Promise.all([
+      context.queryClient.ensureQueryData(productsQuery),
+      context.queryClient.ensureQueryData(collectionsQuery),
+    ]);
   },
   head: () => ({
+
     meta: [
       { title: "ZAKAAS — Maharashtrian Snacks with New-Gen Attitude" },
       {
