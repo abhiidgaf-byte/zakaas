@@ -37,22 +37,28 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
-const CRAVINGS = [
-  { key: "SPICY", line: "You want heat. Chakli, Tikha Masala.", slug: "chakli" },
-  { key: "SWEET", line: "Sugar-dusted and dangerous. Shankarpada.", slug: "shankarpada" },
-  { key: "CRUNCHY", line: "Loud bite, no apologies. Bhakarwadi.", slug: "bhakarwadi" },
-  { key: "CHAI-SIDE", line: "The 4pm classic. Bhakarwadi, Original.", slug: "bhakarwadi" },
-];
-
 function HomePage() {
   const { data: products } = useSuspenseQuery(productsQuery);
-  const [craving, setCraving] = useState<(typeof CRAVINGS)[number]>(CRAVINGS[0]!);
+  const { data: collections } = useSuspenseQuery(collectionsQuery);
+  const categories = buildCategories(products, collections);
+
+  const cravings = categories.slice(0, 4).map((cat) => ({
+    key: cat.name,
+    line: cat.blurb || `${cat.name}. Straight out of the batch.`,
+    slug: cat.slug,
+  }));
+  const [cravingSlug, setCravingSlug] = useState<string | null>(null);
+  const craving = cravings.find((option) => option.slug === cravingSlug) ?? cravings[0] ?? null;
 
   const heroImage = products[0] ? firstImage(products[0])?.url : undefined;
   const imageForCategory = (slug: string) => {
-    const match = products.find((p) => categoryFor(p)?.slug === slug);
+    const cat = categories.find((c) => c.slug === slug);
+    if (!cat) return undefined;
+    if (cat.image) return cat.image;
+    const match = products.find((p) => productInCategory(p, cat));
     return match ? firstImage(match)?.url : undefined;
   };
+
 
   return (
     <div>
